@@ -46,3 +46,11 @@ The disposable HTML fixture was removed after testing. Screenshots in verificati
 Production build runs strict TypeScript checks and Vite. Phaser remains a separate roughly 1.2 MB minified / 332 KB gzip chunk, with Vite's expected large-chunk advisory. No runtime art/font/CDN dependencies were added. The development preview remains running on loopback.
 
 Git origin: https://github.com/AlecRichardson/dungeon-idle.git. A local commit is prepared in this dedicated game repository. Pushing requires GitHub authentication, deferred by the user; no push to the earlier ember-vault URL is attempted.
+
+## Stash and equipped-storage follow-up
+
+22 focused tests and the production build pass after adding stash equipping and separate equipped storage. New outcome checks cover full-pack stash equip, full-stash swaps with protected displaced gear, shared loadout reservations, safe full-pack unequip failure, and v2-to-v3 migration preserving stats, item IDs, deadlines, locks and progression. Equipped items no longer appear in inventory or stash and consume no capacity.
+
+An isolated browser fixture verified Equip from stash changed the weapon frame, reduced Stash 2/30 to 1/30, and left Pack 0/18. Dragging a second stash weapon replaced it and returned the first to stash. Reload preserved the second equipped weapon and first stored weapon; browser errors remained empty. The temporary fixture was removed. Drag previews now render the shared item glyph alone rather than a name label.
+
+The user explicitly kept the two-minute ground lifetime. Live inspection found level-32 Fire output around 174/cast against a fixed 260-HP boss, explaining quick clears; no enemy scaling or stat reset was added. Ground loot is not sold on enemy death: the four-label floor view rotates while older retained items remain in the Ground list until expiration/player death/Gnome sale. An MMO-style scrollable loot-pile presentation was recommended as a future UI change, not implemented in this follow-up.

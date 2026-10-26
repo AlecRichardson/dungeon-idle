@@ -54,8 +54,8 @@ test('full inventory rejects pickup and direct equip atomically while complete r
 test('direct equip keeps the displaced item and the other loadout; failed requirements change nothing', () => {
   const s = newGame(); const i = drop(s); i.slot = 'weapon'; i.baseId = 'voidstaff';
   const displaced = s.loadouts[0].weapon; assert.equal(equip(s, i.id, NOW), true);
-  assert.equal(i.location, 'inventory'); assert.equal(s.loadouts[0].weapon, i.id); assert.equal(s.loadouts[1].weapon, displaced);
-  assert.equal(s.items.filter(j => j.id === displaced).length, 1); assert.equal(s.items.find(j => j.id === displaced)?.location, 'inventory'); assert.equal(s.items.length, 3);
+  assert.equal(i.location, 'equipped'); assert.equal(s.loadouts[0].weapon, i.id); assert.equal(s.loadouts[1].weapon, displaced);
+  assert.equal(s.items.filter(j => j.id === displaced).length, 1); assert.equal(s.items.find(j => j.id === displaced)?.location, 'equipped'); assert.equal(s.items.length, 3);
   const high = drop(s); high.required = 99; const before = serialize(s); assert.equal(equip(s, high.id, NOW), false); assert.equal(serialize(s), before);
 });
 test('expiry is exact, gives no gold, ignores locks and updates history', () => {
@@ -123,8 +123,8 @@ test('save/load preserves exact loot deadlines, locks, cooldown, equipment, prog
 test('old saves migrate once: only inbox items removed; progression, locks and explicit pause survive', () => {
   const s = newGame(); s.level = 7; s.gold = 432; s.xp = 55; s.runs = 3; s.items[0].locked = true;
   const stored = drop(s); pickup(s, stored.id, NOW); moveItem(s, stored.id, 'stash'); const discarded = drop(s); discarded.locked = true;
-  const old = { ...s, version: 1, items: s.items.map(i => i.id === discarded.id ? { ...i, location: 'inbox', ground: undefined } : i), history: s.history.map(({ status, ...h }) => h), inboxLimit: 1, autoSell: ['Common'] };
-  const migrated = restore(JSON.stringify(old), NOW); assert.equal(migrated.version, 2); assert.equal(migrated.items.length, 3); assert.ok(!migrated.items.some(i => i.id === discarded.id)); assert.deepEqual(migrated.items, s.items.filter(i => i.id !== discarded.id));
+  const old = { ...s, version: 1, items: s.items.map(i => i.id === discarded.id ? { ...i, location: 'inbox', ground: undefined } : i.location === 'equipped' ? {...i, location: 'inventory'} : i), history: s.history.map(({ status, ...h }) => h), inboxLimit: 1, autoSell: ['Common'] };
+  const migrated = restore(JSON.stringify(old), NOW); assert.equal(migrated.version, 3); assert.equal(migrated.items.length, 3); assert.ok(!migrated.items.some(i => i.id === discarded.id)); assert.deepEqual(migrated.items, s.items.filter(i => i.id !== discarded.id));
   assert.equal(migrated.gold, 432); assert.equal(migrated.level, 7); assert.equal(migrated.xp, 55); assert.equal(migrated.runs, 3); assert.deepEqual(migrated.loadouts, s.loadouts); assert.deepEqual(migrated.discoveredBases, s.discoveredBases); assert.deepEqual(migrated.discoveredModifiers, s.discoveredModifiers); assert.equal('autoSell' in migrated, false); assert.equal('inboxLimit' in migrated, false);
   const elapsed = migrated.elapsed; step(migrated, .1, random(), NOW); assert.ok(migrated.elapsed > elapsed); assert.equal(serialize(restore(serialize(migrated), NOW)), serialize(migrated));
   old.paused = true; assert.equal(restore(JSON.stringify(old), NOW).paused, true);
@@ -132,7 +132,7 @@ test('old saves migrate once: only inbox items removed; progression, locks and e
 test('paused combat does not pause wall-clock cleanup, and long runs bound unlocked ground accumulation', () => {
   const s = newGame(); const i = drop(s); s.paused = true; step(s, .1, random(), NOW + 120_000); assert.ok(!s.items.includes(i)); assert.equal(s.elapsed, 0);
   s.paused = false; const rng = random(); for (let n = 0; n < 10_000; n++) step(s, .1, rng, NOW + n * 100);
-  assert.ok(s.runs > 8); assert.ok(s.items.filter(j => j.location === 'ground').length < 40); assert.equal(s.items.filter(j => j.location === 'inventory').length, 2);
+  assert.ok(s.runs > 8); assert.ok(s.items.filter(j => j.location === 'ground').length < 40); assert.equal(s.items.filter(j => j.location === 'inventory').length, 0);
 });
 test('a fresh Mage still clears fixed-difficulty encounters within three minutes', () => {
   for (let seed = 1; seed <= 12; seed++) { const s = newGame(); const rng = random(seed); for (let n = 0; n < 1800 && s.runs === 0; n++) step(s, .1, rng, NOW + n * 100); assert.equal(s.runs, 1, 'seed ' + seed); assert.equal(s.deaths, 0); assert.ok(s.elapsed < 180); }
@@ -145,4 +145,37 @@ test('equipment slot drops reject mismatches and obey the same space/level rules
   const before = serialize(s); assert.equal(equipIntoSlot(s, item.id, 'body', NOW), false); assert.equal(serialize(s), before);
   assert.equal(equipIntoSlot(s, item.id, 'weapon', NOW), true); assert.equal(s.loadouts[0].weapon, item.id); assert.equal(s.loadouts[1].weapon, '1'); assert.ok(s.items.some(i => i.id === '1'));
   fillPack(s); const next = drop(s); const full = serialize(s); assert.equal(equipIntoSlot(s, next.id, next.slot, NOW), false); assert.equal(serialize(s), full);
+});
+
+test('stash equipping works with a full pack and equipped gear occupies neither container', () => {
+  const s = newGame(); const a = drop(s); pickup(s, a.id, NOW); moveItem(s, a.id, 'stash'); fillPack(s);
+  const count = s.items.length; const before = s.items.filter(i => i.location === 'inventory').length;
+  assert.equal(equip(s, a.id, NOW), true); assert.equal(a.location, 'equipped'); assert.equal(s.items.filter(i => i.location === 'stash').length, 0);
+  assert.equal(s.items.filter(i => i.location === 'inventory').length, before); assert.equal(s.items.length, count);
+  assert.ok(s.items.filter(i => Object.values(s.loadouts[0]).includes(i.id)).every(i => i.location === 'equipped'));
+});
+test('stash replacements reuse the freed stash slot and preserve locked displaced gear', () => {
+  const s = newGame(); s.level = 10; const first = drop(s); first.slot = 'head'; first.baseId = 'hood'; first.locked = true; equip(s, first.id, NOW);
+  const replacement = drop(s); replacement.slot = 'head'; replacement.baseId = 'hood'; pickup(s, replacement.id, NOW); moveItem(s, replacement.id, 'stash');
+  for (let n = 0; n < 29; n++) { const i = drop(s); pickup(s, i.id, NOW); moveItem(s, i.id, 'stash'); }
+  fillPack(s); const count = s.items.length;
+  assert.equal(equip(s, replacement.id, NOW), true); assert.equal(replacement.location, 'equipped'); assert.equal(first.location, 'stash'); assert.equal(first.locked, true);
+  assert.equal(s.items.filter(i => i.location === 'stash').length, 30); assert.equal(s.items.length, count); assert.equal(s.loadouts[0].head, replacement.id);
+});
+test('shared loadout gear stays reserved; final unequip needs room and never loses an item', () => {
+  const s = newGame(); fillPack(s); const before = s.items.length;
+  assert.equal(unequip(s, 'weapon'), true); assert.equal(s.items.find(i => i.id === '1')?.location, 'equipped');
+  switchLoadout(s, 1); const snapshot = serialize(s); assert.equal(unequip(s, 'weapon'), false); assert.equal(serialize(s), snapshot);
+  const owned = s.items.find(i => i.location === 'inventory')!; moveItem(s, owned.id, 'stash');
+  assert.equal(unequip(s, 'weapon'), true); assert.equal(s.items.find(i => i.id === '1')?.location, 'inventory'); assert.equal(s.items.length, before);
+});
+test('v2 inventory-based equipment migrates once without changing stats, deadlines, IDs or progression', () => {
+  const s = newGame(); s.level = 12; s.gold = 987; s.runs = 5; s.items[0].locked = true;
+  for (let n = 0; n < 16; n++) { const i = drop(s); pickup(s, i.id, NOW); }
+  const ground = drop(s); const old = { ...s, version: 2, items: s.items.map(i => i.location === 'equipped' ? { ...i, location: 'inventory' } : i) };
+  const copy = restore(JSON.stringify(old), NOW); assert.equal(copy.version, 3); assert.equal(copy.gold, 987); assert.equal(copy.level, 12); assert.equal(copy.runs, 5);
+  assert.deepEqual(copy.items.map(i => i.id), s.items.map(i => i.id)); assert.deepEqual(calculate(copy), calculate(s)); assert.deepEqual(copy.loadouts, s.loadouts);
+  assert.equal(copy.items.filter(i => i.location === 'inventory').length, 16); assert.equal(copy.items.filter(i => i.location === 'equipped').length, 2);
+  assert.equal(copy.items.find(i => i.id === ground.id)?.ground?.expiresAt, NOW + 120_000); assert.equal(copy.items[0].locked, true);
+  assert.equal(serialize(restore(serialize(copy), NOW)), serialize(copy));
 });

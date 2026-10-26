@@ -1,12 +1,12 @@
 import { BASES, ENCOUNTERS, LOOT_WEIGHTS, MODIFIERS, RARITIES, SLOTS } from './content.ts';
 import type { Attribute, Bonuses, Element, Encounter, Rarity, Slot } from './content.ts';
 export interface GroundDrop { droppedAt: number; expiresAt: number; floor: number; encounter: number; run: number }
-export interface Item { id: string; baseId: string; name: string; slot: Slot; rarity: Rarity; ilvl: number; required: number; modifiers: string[]; bonuses: Bonuses; locked: boolean; location: 'inventory' | 'stash' | 'ground'; ground?: GroundDrop }
+export interface Item { id: string; baseId: string; name: string; slot: Slot; rarity: Rarity; ilvl: number; required: number; modifiers: string[]; bonuses: Bonuses; locked: boolean; location: 'inventory' | 'stash' | 'ground' | 'equipped'; ground?: GroundDrop }
 export type LootStatus = 'ground' | 'kept' | 'sold' | 'expired' | 'lost' | 'discarded';
 export interface LootRecord { id: string; name: string; rarity: Rarity; sold: boolean; floor: number; status: LootStatus }
 export interface GameEvent { seq: number; type: 'cast' | 'hit' | 'loot' | 'victory' | 'death' | 'level' | 'gnome'; amount?: number; crit?: boolean; element?: Element; itemId?: string; encounter?: number }
 export interface State {
-  version: 2; level: number; xp: number; points: number; attributes: Record<Attribute, number>; gold: number;
+  version: 3; level: number; xp: number; points: number; attributes: Record<Attribute, number>; gold: number;
   items: Item[]; loadouts: [Partial<Record<Slot, string>>, Partial<Record<Slot, string>>]; activeLoadout: 0 | 1;
   spell: Element; hp: number; encounter: number; enemyHp: number; phase: 'moving' | 'fighting' | 'victory' | 'death';
   timer: number; castTimer: number; enemyTimer: number; paused: boolean; gnomeReadyAt: number;
@@ -35,8 +35,8 @@ export function generateItem(id: string, floor: number, kind: Encounter['kind'],
   return { id, baseId: base.id, name: `${base.name}${mods.length ? ' of ' + MODIFIERS.find(m => m.id === mods[0])!.name : ''}`, slot: base.slot, rarity, ilvl, required: Math.max(1, Math.ceil(ilvl / 2)), modifiers: mods, bonuses: itemBonuses(base.id, ilvl, mods, mods.map(() => 0.85 + rng() * 0.3)), locked: false, location: 'inventory' };
 }
 export function newGame(): State {
-  const starter = (id: string, baseId: string): Item => { const base = BASES.find(b => b.id === baseId)!; return { id, baseId, name: base.name, slot: base.slot, rarity: 'Common', ilvl: 1, required: 1, modifiers: [], bonuses: itemBonuses(baseId, 1, []), locked: false, location: 'inventory' }; };
-  const s: State = { version: 2, level: 1, xp: 0, points: 4, attributes: { strength: 2, agility: 2, intellect: 4, endurance: 3 }, gold: 0,
+  const starter = (id: string, baseId: string): Item => { const base = BASES.find(b => b.id === baseId)!; return { id, baseId, name: base.name, slot: base.slot, rarity: 'Common', ilvl: 1, required: 1, modifiers: [], bonuses: itemBonuses(baseId, 1, []), locked: false, location: 'equipped' }; };
+  const s: State = { version: 3, level: 1, xp: 0, points: 4, attributes: { strength: 2, agility: 2, intellect: 4, endurance: 3 }, gold: 0,
     items: [starter('1', 'emberwand'), starter('2', 'silk')], loadouts: [{ weapon: '1', body: '2' }, { weapon: '1', body: '2' }], activeLoadout: 0,
     spell: 'fire', hp: 0, encounter: 0, enemyHp: ENCOUNTERS[0].hp, phase: 'moving', timer: 0, castTimer: 0, enemyTimer: 0, paused: false,
     gnomeReadyAt: 0, runs: 0, deaths: 0, kills: 0, elapsed: 0, history: [], discoveredBases: ['emberwand', 'silk'], discoveredModifiers: [], events: [], seq: 0, nextId: 3 };
@@ -55,6 +55,7 @@ export function calculate(s: State, replacement?: Item) {
     reduction: Math.min(0.7, (a.armor || 0) / ((a.armor || 0) + 60)), crit: Math.min(0.4, 0.05 + (a.agility || 0) * 0.005), fire: damage('fire'), shadow: damage('shadow'), attributes: a };
 }
 export function protectedItem(s: State, id: string) { return !!s.items.find(i => i.id === id)?.locked || s.loadouts.some(l => Object.values(l).includes(id)); }
+function equippedInOtherLoadout(s: State, id: string) { return Object.values(s.loadouts[s.activeLoadout === 0 ? 1 : 0]).includes(id); }
 export function sellValue(i: Item) { return i.ilvl * 3 + RARITIES.indexOf(i.rarity) * 5; }
 function markHistory(s: State, id: string, status: LootStatus) { for (const h of s.history) if (h.id === id) { h.status = status; h.sold = status === 'sold'; } }
 export function sell(s: State, id: string): boolean { const i = s.items.find(i => i.id === id); if (!i || i.location !== 'inventory' || protectedItem(s, id)) return false; s.gold += sellValue(i); s.items.splice(s.items.indexOf(i), 1); markHistory(s, id, 'sold'); return true; }
@@ -75,9 +76,16 @@ export function moveItem(s: State, id: string, location: 'inventory' | 'stash'):
 export function equip(s: State, id: string, now = Date.now()): boolean {
   cleanupGround(s, now);
   const item = s.items.find(i => i.id === id);
-  if (!item || item.required > s.level || item.location === 'stash' || item.location === 'ground' && packFull(s)) return false;
-  // Equipped items already occupy inventory slots. Pickup and replacement commit only after all checks.
-  if (item.location === 'ground') { item.location = 'inventory'; delete item.ground; markHistory(s, id, 'kept'); }
+  if (!item || item.required > s.level || item.location === 'ground' && packFull(s)) return false;
+  const previous = s.items.find(i => i.id === s.loadouts[s.activeLoadout][item.slot]);
+  if (previous?.id === item.id) return true;
+  const destination = item.location === 'stash' ? 'stash' : 'inventory';
+  // Swapping from a container frees a slot there before the previous item is returned.
+  const needsReturn = previous && !equippedInOtherLoadout(s, previous.id);
+  const used = s.items.filter(i => i.location === destination && i.id !== item.id).length;
+  if (needsReturn && used >= (destination === 'stash' ? 30 : 18)) return false;
+  if (needsReturn) previous.location = destination;
+  item.location = 'equipped'; delete item.ground; markHistory(s, id, 'kept');
   s.loadouts[s.activeLoadout][item.slot] = id; s.hp = Math.min(s.hp, calculate(s).maxHp); return true;
 }
 export function equipIntoSlot(s: State, id: string, slot: Slot, now = Date.now()): boolean {
@@ -113,7 +121,15 @@ export function activateGnome(s: State, now = Date.now()): { count: number; gold
   s.gold += gold; s.gnomeReadyAt = now + GNOME_COOLDOWN_MS; emit(s, { type: 'gnome', amount: gold });
   return { count: eligible.length, gold };
 }
-export function unequip(s: State, slot: Slot) { delete s.loadouts[s.activeLoadout][slot]; s.hp = Math.min(s.hp, calculate(s).maxHp); }
+export function unequip(s: State, slot: Slot): boolean {
+  const item = s.items.find(i => i.id === s.loadouts[s.activeLoadout][slot]);
+  if (!item) return true;
+  const shared = equippedInOtherLoadout(s, item.id);
+  if (!shared && packFull(s)) return false;
+  delete s.loadouts[s.activeLoadout][slot];
+  if (!shared) item.location = 'inventory';
+  s.hp = Math.min(s.hp, calculate(s).maxHp); return true;
+}
 export function allocate(s: State, attribute: Attribute) { if (s.points > 0) { s.attributes[attribute]++; s.points--; if (attribute === 'endurance') s.hp += 7; } }
 export function switchLoadout(s: State, index: 0 | 1) { s.activeLoadout = index; s.hp = Math.min(s.hp, calculate(s).maxHp); }
 function emit(s: State, event: Omit<GameEvent, 'seq'>) { s.events.push({ encounter: s.encounter, ...event, seq: ++s.seq }); s.events = s.events.slice(-40); }
@@ -162,20 +178,26 @@ export function restore(raw: string, now = Date.now()): State {
     parsed.history = parsed.history.map((h: LootRecord) => ({ ...h, status: h.sold ? 'sold' : removed.has(h.id) ? 'discarded' : parsed.items.some((i: Item) => i.id === h.id) ? 'kept' : 'sold' }));
     parsed.version = 2; parsed.gnomeReadyAt = 0; delete parsed.autoSell; delete parsed.inboxLimit;
   }
+  if (parsed?.version === 2 && Array.isArray(parsed.items) && Array.isArray(parsed.loadouts)) {
+    const equipped = new Set(parsed.loadouts.flatMap((l: Record<string, string>) => Object.values(l)));
+    for (const i of parsed.items) if (i.location === 'inventory' && equipped.has(i.id)) i.location = 'equipped';
+    parsed.version = 3;
+  }
   const s: State = parsed;
   const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-  if (!s || s.version !== 2 || !Array.isArray(s.items) || !Array.isArray(s.loadouts) || s.loadouts.length !== 2 || !['fire', 'shadow'].includes(s.spell) || !['moving', 'fighting', 'victory', 'death'].includes(s.phase)) throw new Error('Unsupported save');
+  if (!s || s.version !== 3 || !Array.isArray(s.items) || !Array.isArray(s.loadouts) || s.loadouts.length !== 2 || !['fire', 'shadow'].includes(s.spell) || !['moving', 'fighting', 'victory', 'death'].includes(s.phase)) throw new Error('Unsupported save');
   for (const k of ['level', 'xp', 'points', 'gold', 'hp', 'encounter', 'enemyHp', 'timer', 'castTimer', 'enemyTimer', 'gnomeReadyAt', 'runs', 'deaths', 'kills', 'elapsed', 'seq', 'nextId'] as const) if (!finite(s[k]) || s[k] < 0) throw new Error('Invalid number');
   if (!Number.isInteger(s.level) || s.level < 1 || !Number.isInteger(s.encounter) || !ENCOUNTERS[s.encounter] || ![0, 1].includes(s.activeLoadout) || typeof s.paused !== 'boolean') throw new Error('Invalid progress');
   for (const k of ['strength', 'agility', 'intellect', 'endurance'] as const) if (!finite(s.attributes?.[k]) || s.attributes[k] < 0) throw new Error('Invalid attributes');
   const ids = new Set<string>();
   for (const i of s.items) {
     const base = BASES.find(b => b.id === i.baseId);
-    if (!base || i.slot !== base.slot || !RARITIES.includes(i.rarity) || !['inventory', 'stash', 'ground'].includes(i.location) || typeof i.id !== 'string' || ids.has(i.id) || typeof i.name !== 'string' || typeof i.locked !== 'boolean' || !Number.isInteger(i.ilvl) || i.ilvl < 1 || i.required !== Math.ceil(i.ilvl / 2) || !Array.isArray(i.modifiers) || new Set(i.modifiers).size !== i.modifiers.length || i.modifiers.some(id => !MODIFIERS.some(m => m.id === id && m.slots.includes(i.slot))) || !i.bonuses || Object.entries(i.bonuses).some(([k,v]) => !['strength','agility','intellect','endurance','power','armor','health','damage','fire','shadow'].includes(k) || !finite(v) || v < 0)) throw new Error('Invalid equipment');
+    if (!base || i.slot !== base.slot || !RARITIES.includes(i.rarity) || !['inventory', 'stash', 'ground', 'equipped'].includes(i.location) || typeof i.id !== 'string' || ids.has(i.id) || typeof i.name !== 'string' || typeof i.locked !== 'boolean' || !Number.isInteger(i.ilvl) || i.ilvl < 1 || i.required !== Math.ceil(i.ilvl / 2) || !Array.isArray(i.modifiers) || new Set(i.modifiers).size !== i.modifiers.length || i.modifiers.some(id => !MODIFIERS.some(m => m.id === id && m.slots.includes(i.slot))) || !i.bonuses || Object.entries(i.bonuses).some(([k,v]) => !['strength','agility','intellect','endurance','power','armor','health','damage','fire','shadow'].includes(k) || !finite(v) || v < 0)) throw new Error('Invalid equipment');
     if (i.location === 'ground' && (!i.ground || !finite(i.ground.droppedAt) || !finite(i.ground.expiresAt) || i.ground.droppedAt < 0 || i.ground.expiresAt < i.ground.droppedAt || !Number.isInteger(i.ground.floor) || i.ground.floor < 0 || i.ground.floor > 2 || !Number.isInteger(i.ground.encounter) || !ENCOUNTERS[i.ground.encounter] || !Number.isInteger(i.ground.run) || i.ground.run < 0)) throw new Error('Invalid floor loot');
     ids.add(i.id);
   }
-  for (const l of s.loadouts) { if (!l || typeof l !== 'object') throw new Error('Invalid loadout'); for (const [slot, id] of Object.entries(l)) if (!SLOTS.includes(slot as Slot) || !s.items.some(i => i.id === id && i.slot === slot && i.required <= s.level && i.location === 'inventory')) throw new Error('Missing equipped item'); }
+  for (const l of s.loadouts) { if (!l || typeof l !== 'object') throw new Error('Invalid loadout'); for (const [slot, id] of Object.entries(l)) if (!SLOTS.includes(slot as Slot) || !s.items.some(i => i.id === id && i.slot === slot && i.required <= s.level && i.location === 'equipped')) throw new Error('Missing equipped item'); }
+  if (s.items.some(i => i.location === 'equipped' && !s.loadouts.some(l => Object.values(l).includes(i.id)))) throw new Error('Orphaned equipped item');
   if (!Array.isArray(s.history) || s.history.some(h => !h || typeof h.id !== 'string' || typeof h.name !== 'string' || !RARITIES.includes(h.rarity) || typeof h.sold !== 'boolean' || !['ground','kept','sold','expired','lost','discarded'].includes(h.status)) || !Array.isArray(s.discoveredBases) || s.discoveredBases.some(id => !BASES.some(b => b.id === id)) || !Array.isArray(s.discoveredModifiers) || s.discoveredModifiers.some(id => !MODIFIERS.some(m => m.id === id))) throw new Error('Invalid collections');
   s.events = []; cleanupGround(s, now); return s;
 }

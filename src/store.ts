@@ -9,8 +9,9 @@ try {
   const raw = localStorage.getItem(KEY);
   if (raw) {
     const loaded = restore(raw);
-    if (JSON.parse(raw).version === 1) {
-      localStorage.setItem('embervault.save.before-floor-loot', raw);
+    if (JSON.parse(raw).version !== loaded.version) {
+      const backupKey = JSON.parse(raw).version === 1 ? 'embervault.save.before-floor-loot' : 'embervault.save.before-equipped-storage';
+      localStorage.setItem(backupKey, raw);
       localStorage.setItem(KEY, serialize(loaded));
     }
     state = loaded;
