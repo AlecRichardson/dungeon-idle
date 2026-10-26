@@ -62,3 +62,7 @@ Diagnosed legacy branch-root publication of unbuilt TypeScript, with no Actions 
 The first workflow completed successfully (run 40273617279), and the live URL https://alecrichardson.github.io/dungeon-idle/ loaded the actual React/Phaser game in the browser. The hosted origin uses a separate local save from localhost.
 
 Per the user's follow-up, Ground rows now preserve drop arrival order (oldest first) and expose no sorting or slot-filter controls. New drops append to the pile. Only pack/stash retain equipment organization. Re-dropped owned items use their new droppedAt timestamp, so they appear as new arrivals. The production build passes with these changes; no gameplay formulas, loot deadlines or inventory rules changed.
+
+## Double-click pickup — 2026-10-26
+
+Added double-click pickup on both spatial ground labels and Ground rows, reusing the existing pickup rules. Single-click inspection, click/tap pickup buttons and dragging remain available; completed drags suppress accidental double-clicks. Production build passes. Isolated browser checks confirmed floor-label pickup (Ground 2→1, Pack 0→1), list pickup (Ground 1→0, Pack 1→2), persistence after reload and full-pack rejection with both ground items retained. Console error inspection was empty. No new simulation rules or dependencies were added.

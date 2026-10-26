@@ -37,5 +37,5 @@ export function ItemTooltip({ item, anchor }: { item: Item; anchor: HTMLElement 
     place(); window.addEventListener('resize', place); window.addEventListener('scroll', place, true);
     return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
   }, [anchor, item.id]);
-  return createPortal(<div ref={host} id="item-tooltip" role="tooltip" className="item-tooltip" style={{ left: position.left, top: position.top, visibility: position.ready ? 'visible' : 'hidden' }}><ItemDetails item={item} compact/><p className="quiet">Click to inspect and choose an action.</p></div>, document.body);
+  return createPortal(<div ref={host} id="item-tooltip" role="tooltip" className="item-tooltip" style={{ left: position.left, top: position.top, visibility: position.ready ? 'visible' : 'hidden' }}><ItemDetails item={item} compact/><p className="quiet">{item.location === 'ground' ? 'Double-click to pick up · click to inspect.' : 'Click to inspect and choose an action.'}</p></div>, document.body);
 }

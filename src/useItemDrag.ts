@@ -37,6 +37,7 @@ export function useItemDrag(notify: (text: string) => void, closeTooltip: () => 
     window.addEventListener('pointermove', move, { passive: false }); window.addEventListener('pointerup', finish); window.addEventListener('pointercancel', finish);
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', finish); };
   }, [notify, closeTooltip]);
+  const suppressDragClick = (e: MouseEvent<HTMLButtonElement>) => { if (performance.now() < suppressClickUntil.current) { e.preventDefault(); e.stopPropagation(); } };
   const props = (item: Item) => ({
     'data-item-drag': 'true',
     draggable: false,
@@ -46,7 +47,8 @@ export function useItemDrag(notify: (text: string) => void, closeTooltip: () => 
       session.current = { id: item.id, pointerId: e.pointerId, x: e.clientX, y: e.clientY, source: e.currentTarget, active: false };
       e.currentTarget.setPointerCapture(e.pointerId);
     },
-    onClickCapture: (e: MouseEvent<HTMLButtonElement>) => { if (performance.now() < suppressClickUntil.current) { e.preventDefault(); e.stopPropagation(); } },
+    onClickCapture: suppressDragClick,
+    onDoubleClickCapture: suppressDragClick,
   });
   return { drag, props };
 }

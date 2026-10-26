@@ -71,3 +71,5 @@ The project URL is https://alecrichardson.github.io/dungeon-idle/. Vite uses rel
 The hosted game has its own browser localStorage origin. Localhost saves do not transfer automatically. Existing export remains available; import/cloud synchronization is still deferred.
 
 Ground loot is displayed strictly by arrival time (oldest first, new drops at the bottom), with no sorting/filter controls. Expiration, picking up, equipping and Gnome sales remove items from that same pile; pack/stash organization remains independent.
+
+Double-click a ground label or a Ground-list item to pick it up immediately. Single click still opens inspection; the Pick up button remains available. A full pack leaves the item on the ground with a clear message. Completing a drag suppresses accidental click/double-click pickup.
