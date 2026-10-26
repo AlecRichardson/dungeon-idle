@@ -54,3 +54,11 @@ Git origin: https://github.com/AlecRichardson/dungeon-idle.git. A local commit i
 An isolated browser fixture verified Equip from stash changed the weapon frame, reduced Stash 2/30 to 1/30, and left Pack 0/18. Dragging a second stash weapon replaced it and returned the first to stash. Reload preserved the second equipped weapon and first stored weapon; browser errors remained empty. The temporary fixture was removed. Drag previews now render the shared item glyph alone rather than a name label.
 
 The user explicitly kept the two-minute ground lifetime. Live inspection found level-32 Fire output around 174/cast against a fixed 260-HP boss, explaining quick clears; no enemy scaling or stat reset was added. Ground loot is not sold on enemy death: the four-label floor view rotates while older retained items remain in the Ground list until expiration/player death/Gnome sale. An MMO-style scrollable loot-pile presentation was recommended as a future UI change, not implemented in this follow-up.
+
+## GitHub Pages deployment and ground order — 2026-10-26
+
+Diagnosed legacy branch-root publication of unbuilt TypeScript, with no Actions build configured. Added a Node-24/pnpm workflow that tests, builds dist, uploads the Pages artifact and deploys it with the environment URL. Changed the Pages publishing source to workflow through the authenticated GitHub API. Vite now emits relative asset URLs for the /dungeon-idle/ project path.
+
+The first workflow completed successfully (run 40273617279), and the live URL https://alecrichardson.github.io/dungeon-idle/ loaded the actual React/Phaser game in the browser. The hosted origin uses a separate local save from localhost.
+
+Per the user's follow-up, Ground rows now preserve drop arrival order (oldest first) and expose no sorting or slot-filter controls. New drops append to the pile. Only pack/stash retain equipment organization. Re-dropped owned items use their new droppedAt timestamp, so they appear as new arrivals. The production build passes with these changes; no gameplay formulas, loot deadlines or inventory rules changed.

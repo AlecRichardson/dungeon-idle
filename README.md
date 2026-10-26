@@ -12,7 +12,7 @@ pnpm install
 pnpm dev
 ```
 
-Open http://127.0.0.1:5173/. Loopback only; no public deployment. On this machine pnpm is also available at `C:\Users\alecw\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd`. With dependencies installed, `node node_modules/vite/bin/vite.js --host 127.0.0.1` also works.
+Open http://127.0.0.1:5173/. The local development server listens on loopback; GitHub Pages hosting is described below. On this machine pnpm is also available at `C:\Users\alecw\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd`. With dependencies installed, `node node_modules/vite/bin/vite.js --host 127.0.0.1` also works.
 
 `pnpm test` runs the focused rules tests. `pnpm build` checks TypeScript and creates production assets; `pnpm preview` serves them on port 4173. Keep using the same origin/port for your saved game. Do not open dist/index.html directly.
 
@@ -69,3 +69,5 @@ Pages uses `.github/workflows/pages.yml` on pushes to `codex/floor-loot` (also m
 The project URL is https://alecrichardson.github.io/dungeon-idle/. Vite uses relative asset URLs so scripts/styles load under that project path and in local previews. The Actions deployment job and the github-pages environment expose the link after successful deployment. Only built assets are published; dependency directories and research projects are excluded.
 
 The hosted game has its own browser localStorage origin. Localhost saves do not transfer automatically. Existing export remains available; import/cloud synchronization is still deferred.
+
+Ground loot is displayed strictly by arrival time (oldest first, new drops at the bottom), with no sorting/filter controls. Expiration, picking up, equipping and Gnome sales remove items from that same pile; pack/stash organization remains independent.
