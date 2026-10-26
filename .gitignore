@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.tsbuildinfo
+verification/*.png
+verification/*.jpg
