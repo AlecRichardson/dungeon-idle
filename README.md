@@ -61,3 +61,11 @@ Ground deadlines, ground locks and the Gnome cooldown persist. Deadlines use wal
 This remains one dungeon, one Mage, two spells and eight bases. Offline catch-up, more content/classes, mana/ranks/trees, a shop/gold sinks, sound, polished character art, save import/migrations beyond version 1, and broader device/accessibility coverage remain V1 work. The fixed dungeon eventually becomes easy. Locked ground items intentionally remain until the player manages them; only unlocked accumulation is automatically bounded. Phaser remains the main bundle cost at about 332 KB gzip.
 
 See VERIFICATION.md for completed checks. The dedicated game repository uses origin `https://github.com/AlecRichardson/dungeon-idle.git`; unrelated parent research/launcher/add-on projects are outside its checkout.
+
+## GitHub Pages hosting
+
+Pages uses `.github/workflows/pages.yml` on pushes to `codex/floor-loot` (also manually runnable from Actions). It installs the locked pnpm dependencies, runs tests, builds `dist`, uploads that folder, then deploys it with an environment URL. In Settings → Pages, the publishing source must be **GitHub Actions**, not **Deploy from a branch**. The source tree contains TypeScript and must not be served directly.
+
+The project URL is https://alecrichardson.github.io/dungeon-idle/. Vite uses relative asset URLs so scripts/styles load under that project path and in local previews. The Actions deployment job and the github-pages environment expose the link after successful deployment. Only built assets are published; dependency directories and research projects are excluded.
+
+The hosted game has its own browser localStorage origin. Localhost saves do not transfer automatically. Existing export remains available; import/cloud synchronization is still deferred.
